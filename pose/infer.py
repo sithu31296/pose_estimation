@@ -1,53 +1,75 @@
-import torch
-import cv2
-import argparse
-import numpy as np
-from tqdm import tqdm
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from pathlib import Path
+
+import cv2
+import numpy as np
+import torch
+from ultralytics import YOLO
 from torchvision import transforms as T
+from tqdm import tqdm
 
 from pose.models import get_pose_model
-from pose.utils.boxes import letterbox, scale_boxes, non_max_suppression, xyxy2xywh
+from pose.utils.boxes import letterbox, non_max_suppression, scale_boxes, xyxy2xywh
 from pose.utils.decode import get_final_preds, get_simdr_final_preds
-from pose.utils.utils import setup_cudnn, get_affine_transform, draw_keypoints
-from pose.utils.utils import VideoReader, VideoWriter, WebcamStream, FPS
-
-import sys
-sys.path.insert(0, 'yolov5')
-from yolov5.models.experimental import attempt_load
+from pose.utils.utils import (
+    FPS,
+    VideoReader,
+    VideoWriter,
+    WebcamStream,
+    draw_keypoints,
+    get_affine_transform,
+    setup_cudnn,
+)
 
 
 class Pose:
-    def __init__(self, 
+    def __init__(
+        self,
         det_model,
         pose_model,
         img_size=640,
         conf_thres=0.25,
-        iou_thres=0.45, 
+        iou_thres=0.45,
     ) -> None:
         self.img_size = img_size
         self.conf_thres = conf_thres
         self.iou_thres = iou_thres
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.det_model = attempt_load(det_model, map_location=self.device)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.det_model = YOLO(det_model)
         self.det_model = self.det_model.to(self.device)
 
         self.model_name = pose_model
         self.pose_model = get_pose_model(pose_model)
-        self.pose_model.load_state_dict(torch.load(pose_model, map_location='cpu'))
+        self.pose_model.load_state_dict(torch.load(pose_model, map_location="cpu"))
         self.pose_model = self.pose_model.to(self.device)
         self.pose_model.eval()
 
         self.patch_size = (192, 256)
 
-        self.pose_transform = T.Compose([
-            T.ToTensor(),
-            T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-        ])
+        self.pose_transform = T.Compose(
+            [T.ToTensor(), T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))]
+        )
 
         self.coco_skeletons = [
-            [16,14],[14,12],[17,15],[15,13],[12,13],[6,12],[7,13], [6,7],[6,8],
-            [7,9],[8,10],[9,11],[2,3],[1,2],[1,3],[2,4],[3,5],[4,6],[5,7]
+            [16, 14],
+            [14, 12],
+            [17, 15],
+            [15, 13],
+            [12, 13],
+            [6, 12],
+            [7, 13],
+            [6, 7],
+            [6, 8],
+            [7, 9],
+            [8, 10],
+            [9, 11],
+            [2, 3],
+            [1, 2],
+            [1, 3],
+            [2, 4],
+            [3, 5],
+            [4, 6],
+            [5, 7],
         ]
 
     def preprocess(self, image):
@@ -64,15 +86,19 @@ class Pose:
         mask = boxes[:, 2] > boxes[:, 3] * r
         boxes[mask, 3] = boxes[mask, 2] / r
         boxes[~mask, 2] = boxes[~mask, 3] * r
-        boxes[:, 2:] /= pixel_std 
+        boxes[:, 2:] /= pixel_std
         boxes[:, 2:] *= 1.25
         return boxes
 
     def predict_poses(self, boxes, img):
         image_patches = []
         for cx, cy, w, h in boxes:
-            trans = get_affine_transform(np.array([cx, cy]), np.array([w, h]), self.patch_size)
-            img_patch = cv2.warpAffine(img, trans, self.patch_size, flags=cv2.INTER_LINEAR)
+            trans = get_affine_transform(
+                np.array([cx, cy]), np.array([w, h]), self.patch_size
+            )
+            img_patch = cv2.warpAffine(
+                img, trans, self.patch_size, flags=cv2.INTER_LINEAR
+            )
             img_patch = self.pose_transform(img_patch)
             image_patches.append(img_patch)
 
@@ -88,7 +114,7 @@ class Pose:
                 boxes = self.box_to_center_scale(boxes)
                 outputs = self.predict_poses(boxes, img0)
 
-                if 'simdr' in self.model_name:
+                if "simdr" in self.model_name:
                     coords = get_simdr_final_preds(*outputs, boxes, self.patch_size)
                 else:
                     coords = get_final_preds(outputs, boxes)
@@ -98,40 +124,48 @@ class Pose:
     @torch.no_grad()
     def predict(self, image):
         img = self.preprocess(image)
-        pred = self.det_model(img)[0]  
+        pred = self.det_model(img)[0]
         self.postprocess(pred, img, image)
         return image
 
 
 def argument_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--source', type=str, default='assests/test.jpg')
-    parser.add_argument('--det-model', type=str, default='checkpoints/crowdhuman_yolov5m.pt')
-    parser.add_argument('--pose-model', type=str, default='checkpoints/pretrained/simdr_hrnet_w32_256x192.pth')
-    parser.add_argument('--img-size', type=int, default=640)
-    parser.add_argument('--conf-thres', type=float, default=0.4)
-    parser.add_argument('--iou-thres', type=float, default=0.5)
+    parser = ArgumentParser(
+        description="Pose Estimation",
+        formatter_class=ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument("--source", type=str, default="assests/test.jpg")
+    parser.add_argument(
+        "--det-model", type=str, default="checkpoints/crowdhuman_yolov5m.pt"
+    )
+    parser.add_argument(
+        "--pose-model",
+        type=str,
+        default="checkpoints/pretrained/simdr_hrnet_w32_256x192.pth",
+    )
+    parser.add_argument("--img-size", type=int, default=640)
+    parser.add_argument("--conf-thres", type=float, default=0.4)
+    parser.add_argument("--iou-thres", type=float, default=0.5)
     return parser.parse_args()
 
 
-if __name__ == '__main__':
+def main():
     setup_cudnn()
     args = argument_parser()
     pose = Pose(
-        args.det_model,
-        args.pose_model,
-        args.img_size,
-        args.conf_thres,
-        args.iou_thres
+        args.det_model, args.pose_model, args.img_size, args.conf_thres, args.iou_thres
     )
 
     source = Path(args.source)
 
-    if source.is_file() and source.suffix in ['.jpg', '.png']:
+    if source.is_file() and source.suffix in [".jpg", ".png"]:
         image = cv2.imread(str(source))
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         output = pose.predict(image)
-        cv2.imwrite(f"{str(source).rsplit('.', maxsplit=1)[0]}_out.jpg", cv2.cvtColor(output, cv2.COLOR_RGB2BGR))
+        cv2.imwrite(
+            f"{str(source).rsplit('.', maxsplit=1)[0]}_out.jpg",
+            cv2.cvtColor(output, cv2.COLOR_RGB2BGR),
+        )
 
     elif source.is_dir():
         files = source.glob("*.jpg")
@@ -139,11 +173,16 @@ if __name__ == '__main__':
             image = cv2.imread(str(file))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             output = pose.predict(image)
-            cv2.imwrite(f"{str(file).rsplit('.', maxsplit=1)[0]}_out.jpg", cv2.cvtColor(output, cv2.COLOR_RGB2BGR))
+            cv2.imwrite(
+                f"{str(file).rsplit('.', maxsplit=1)[0]}_out.jpg",
+                cv2.cvtColor(output, cv2.COLOR_RGB2BGR),
+            )
 
-    elif source.is_file() and source.suffix in ['.mp4', '.avi']:
+    elif source.is_file() and source.suffix in [".mp4", ".avi"]:
         reader = VideoReader(args.source)
-        writer = VideoWriter(f"{args.source.rsplit('.', maxsplit=1)[0]}_out.mp4", reader.fps)
+        writer = VideoWriter(
+            f"{args.source.rsplit('.', maxsplit=1)[0]}_out.mp4", reader.fps
+        )
         fps = FPS(len(reader.frames))
 
         for frame in tqdm(reader):
@@ -151,7 +190,7 @@ if __name__ == '__main__':
             output = pose.predict(frame.numpy())
             fps.stop(False)
             writer.update(output)
-        
+
         print(f"FPS: {fps.fps}")
         writer.write()
 
@@ -163,4 +202,8 @@ if __name__ == '__main__':
             fps.start()
             output = pose.predict(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             fps.stop()
-            cv2.imshow('frame', cv2.cvtColor(output, cv2.COLOR_RGB2BGR))
+            cv2.imwrite("frame.jpg", cv2.cvtColor(output, cv2.COLOR_RGB2BGR))
+
+
+if __name__ == "__main__":
+    main()
