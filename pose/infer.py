@@ -25,23 +25,26 @@ from pose.utils.utils import (
 class Pose:
     def __init__(
         self,
-        det_model,
-        pose_model,
-        img_size=640,
-        conf_thres=0.25,
-        iou_thres=0.45,
+        det_model: str,
+        pose_model: str,
+        img_size: int = 640,
+        conf_thres: float = 0.25,
+        iou_thres: float = 0.45,
     ) -> None:
         self.img_size = img_size
         self.conf_thres = conf_thres
         self.iou_thres = iou_thres
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         if "yolov5" in det_model:
+            self.det_model_type = "yolov5"
             self.det_model = torch.hub.load(
                 "ultralytics/yolov5", "custom", path=det_model, force_reload=True
             )
             self.det_model = self.det_model.to(self.device)
         else:
+            self.det_model_type = "yolo"
             self.det_model = YOLO(det_model)
             self.det_model = self.det_model.to(self.device)
 
@@ -121,7 +124,7 @@ class Pose:
                 boxes = self.box_to_center_scale(boxes)
                 outputs = self.predict_poses(boxes, img0)
 
-                if "simdr" in self.model_name:
+                if "simdr" in self.model_name.lower():
                     coords = get_simdr_final_preds(*outputs, boxes, self.patch_size)
                 else:
                     coords = get_final_preds(outputs, boxes)
@@ -141,18 +144,29 @@ def argument_parser():
         description="Pose Estimation",
         formatter_class=ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--source", type=str, default="assests/test.jpg")
     parser.add_argument(
-        "--det-model", type=str, default="checkpoints/crowdhuman_yolov5m.pt"
+        "--source",
+        type=str,
+        default="assests/test.jpg",
+        help="Path to image, video or webcam",
+    )
+    parser.add_argument(
+        "--det-model",
+        type=str,
+        default="checkpoints/crowdhuman_yolov5m.pt",
+        help="Human detection model",
     )
     parser.add_argument(
         "--pose-model",
         type=str,
         default="checkpoints/pretrained/simdr_hrnet_w32_256x192.pth",
+        help="Pose estimation model",
     )
-    parser.add_argument("--img-size", type=int, default=640)
-    parser.add_argument("--conf-thres", type=float, default=0.4)
-    parser.add_argument("--iou-thres", type=float, default=0.5)
+    parser.add_argument("--img-size", type=int, default=640, help="Image size")
+    parser.add_argument(
+        "--conf-thres", type=float, default=0.5, help="Confidence threshold"
+    )
+    parser.add_argument("--iou-thres", type=float, default=0.5, help="IOU threshold")
     return parser.parse_args()
 
 
@@ -160,7 +174,11 @@ def main():
     setup_cudnn()
     args = argument_parser()
     pose = Pose(
-        args.det_model, args.pose_model, args.img_size, args.conf_thres, args.iou_thres
+        det_model=args.det_model,
+        pose_model=args.pose_model,
+        img_size=args.img_size,
+        conf_thres=args.conf_thres,
+        iou_thres=args.iou_thres,
     )
 
     source = Path(args.source)

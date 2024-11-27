@@ -1,6 +1,6 @@
 import cv2
-import torch
 import numpy as np
+import torch
 from torchvision import ops
 
 
@@ -18,7 +18,9 @@ def letterbox(img, new_shape=(640, 640)):
 
     top, bottom = round(pH - 0.1), round(pH + 0.1)
     left, right = round(pW - 0.1), round(pW + 0.1)
-    img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
+    img = cv2.copyMakeBorder(
+        img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114)
+    )
     return img
 
 
@@ -31,7 +33,7 @@ def scale_boxes(boxes, orig_shape, new_shape):
     boxes[:, ::2] -= pad[1]
     boxes[:, 1::2] -= pad[0]
     boxes[:, :4] /= gain
-    
+
     boxes[:, ::2].clamp_(0, orig_shape[1])
     boxes[:, 1::2].clamp_(0, orig_shape[0])
     return boxes.round()
@@ -56,7 +58,7 @@ def xyxy2xywh(x):
 
 
 def non_max_suppression(pred, conf_thres=0.25, iou_thres=0.45, classes=None):
-    candidates = pred[..., 4] > conf_thres 
+    candidates = pred[..., 4] > conf_thres
 
     max_wh = 4096
     max_nms = 30000
@@ -67,10 +69,11 @@ def non_max_suppression(pred, conf_thres=0.25, iou_thres=0.45, classes=None):
     for xi, x in enumerate(pred):
         x = x[candidates[xi]]
 
-        if not x.shape[0]: continue
+        if not x.shape[0]:
+            continue
 
         # compute conf
-        x[:, 5:] *= x[:, 4:5]   # conf = obj_conf * cls_conf
+        x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
 
         # box
         box = xywh2xyxy(x[:, :4])
@@ -85,7 +88,7 @@ def non_max_suppression(pred, conf_thres=0.25, iou_thres=0.45, classes=None):
 
         # check shape
         n = x.shape[0]
-        if not n: 
+        if not n:
             continue
         elif n > max_nms:
             x = x[x[:, 4].argsort(descending=True)[:max_nms]]

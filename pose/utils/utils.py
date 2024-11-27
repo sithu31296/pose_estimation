@@ -14,27 +14,32 @@ def setup_cudnn() -> None:
 
 
 def draw_coco_keypoints(img, keypoints, skeletons):
-    if keypoints == []: return img
+    if keypoints == []:
+        return img
     image = img.copy()
     for kpts in keypoints:
         for x, y, v in kpts:
             if v == 2:
                 cv2.circle(image, (x, y), 4, (255, 0, 0), 2)
         for kid1, kid2 in skeletons:
-            x1, y1, v1 = kpts[kid1-1]
-            x2, y2, v2 = kpts[kid2-1]
+            x1, y1, v1 = kpts[kid1 - 1]
+            x2, y2, v2 = kpts[kid2 - 1]
             if v1 == 2 and v2 == 2:
-                cv2.line(image, (x1, y1), (x2, y2), (0, 255, 0), 2)   
-    return image 
+                cv2.line(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    return image
 
 
 def draw_keypoints(img, keypoints, skeletons):
-    if keypoints == []: return img
+    if len(keypoints) == 0 or (
+        isinstance(keypoints, np.ndarray) and keypoints.size == 0
+    ):
+        return img
+
     for kpts in keypoints:
         for x, y in kpts:
             cv2.circle(img, (x, y), 4, (255, 0, 0), 2, cv2.LINE_AA)
         for kid1, kid2 in skeletons:
-            cv2.line(img, kpts[kid1-1], kpts[kid2-1], (0, 255, 0), 2, cv2.LINE_AA)   
+            cv2.line(img, kpts[kid1 - 1], kpts[kid2 - 1], (0, 255, 0), 2, cv2.LINE_AA)
 
 
 class WebcamStream:
@@ -56,7 +61,7 @@ class WebcamStream:
     def __next__(self):
         self.count += 1
 
-        if cv2.waitKey(1) == ord('q'):
+        if cv2.waitKey(1) == ord("q"):
             self.stop()
 
         return self.frame.copy()
@@ -71,8 +76,8 @@ class WebcamStream:
 
 class VideoReader:
     def __init__(self, video: str):
-        self.frames, _, info = io.read_video(video, pts_unit='sec')
-        self.fps = info['video_fps']
+        self.frames, _, info = io.read_video(video, pts_unit="sec")
+        self.fps = info["video_fps"]
 
         print(f"Processing '{video}'...")
         print(f"Total Frames: {len(self.frames)}")
@@ -130,7 +135,8 @@ class FPS:
         self.counts += 1
         if self.counts == self.avg:
             self.fps = round(self.counts / self.accum_time)
-            if debug: print(f"FPS: {self.fps}")
+            if debug:
+                print(f"FPS: {self.fps}")
             self.counts = 0
             self.accum_time = 0
 
