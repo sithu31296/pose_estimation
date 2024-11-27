@@ -35,8 +35,15 @@ class Pose:
         self.conf_thres = conf_thres
         self.iou_thres = iou_thres
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.det_model = YOLO(det_model)
-        self.det_model = self.det_model.to(self.device)
+
+        if "yolov5" in det_model:
+            self.det_model = torch.hub.load(
+                "ultralytics/yolov5", "custom", path=det_model, force_reload=True
+            )
+            self.det_model = self.det_model.to(self.device)
+        else:
+            self.det_model = YOLO(det_model)
+            self.det_model = self.det_model.to(self.device)
 
         self.model_name = pose_model
         self.pose_model = get_pose_model(pose_model)
@@ -121,7 +128,7 @@ class Pose:
 
                 draw_keypoints(img0, coords, self.coco_skeletons)
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def predict(self, image):
         img = self.preprocess(image)
         pred = self.det_model(img)[0]
