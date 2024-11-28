@@ -16,6 +16,7 @@ from pose.utils.utils import (
     VideoReader,
     VideoWriter,
     WebcamStream,
+    draw_bbox,
     draw_keypoints,
     get_affine_transform,
     setup_cudnn,
@@ -129,7 +130,8 @@ class Pose:
                 else:
                     coords = get_final_preds(outputs, boxes)
 
-                draw_keypoints(img0, coords, self.coco_skeletons)
+                img0 = draw_keypoints(img0, coords, self.coco_skeletons)
+                img0 = draw_bbox(img0, det.cpu().numpy())
 
     @torch.inference_mode()
     def predict(self, image):

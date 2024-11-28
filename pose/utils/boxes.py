@@ -57,50 +57,77 @@ def xyxy2xywh(x):
     return y
 
 
-def non_max_suppression(pred, conf_thres=0.25, iou_thres=0.45, classes=None):
-    candidates = pred[..., 4] > conf_thres
+def non_max_suppression(
+    pred: torch.Tensor,
+    conf_thres: float = 0.25,
+    iou_thres: float = 0.45,
+    classes: list = None,
+    max_det: int = 300,
+) -> list:
+    """
+    Non-Maximum Suppression (NMS) on inference results
 
-    max_wh = 4096
-    max_nms = 30000
-    max_det = 300
+    Args:
+        pred: predictions tensor (n,7) [x, y, w, h, obj_conf, cls1_conf, cls2_conf]
+        conf_thres: confidence threshold
+        iou_thres: NMS IoU threshold
+        classes: filter by class (e.g. [0] for persons only)
+        max_det: maximum number of detections per image
 
-    output = [torch.zeros((0, 6), device=pred.device)] * pred.shape[0]
+    Returns:
+        list of detections, on (n,6) tensor per image [xyxy, conf, cls]
+    """
+    # Ensure pred is 2D
+    if pred.dim() == 1:
+        pred = pred.unsqueeze(0)
 
-    for xi, x in enumerate(pred):
-        x = x[candidates[xi]]
+    # Calculate confidence
+    conf = pred[:, 4]  # objectness score
+    class_scores = pred[:, 5:]  # class probabilities
+    class_conf, class_pred = class_scores.max(1)  # best class confidence and prediction
+    confidence = conf * class_conf  # combine scores
 
-        if not x.shape[0]:
-            continue
+    # Filter by confidence
+    conf_mask = confidence > conf_thres
+    pred = pred[conf_mask]
+    confidence = confidence[conf_mask]
+    class_pred = class_pred[conf_mask]
 
-        # compute conf
-        x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+    if not pred.shape[0]:  # no boxes
+        return [torch.zeros((0, 6), device=pred.device)]
 
-        # box
-        box = xywh2xyxy(x[:, :4])
+    # Convert boxes from [x, y, w, h] to [x1, y1, x2, y2]
+    boxes = xywh2xyxy(pred[:, :4])
 
-        # detection matrix nx6
-        conf, j = x[:, 5:].max(1, keepdim=True)
-        x = torch.cat([box, conf, j.float()], dim=1)[conf.view(-1) > conf_thres]
+    # Filter by class
+    if classes is not None:
+        if isinstance(classes, int):
+            classes = [classes]
+        class_mask = torch.zeros_like(class_pred, dtype=torch.bool)
+        for c in classes:
+            class_mask |= class_pred == c
+        boxes = boxes[class_mask]
+        confidence = confidence[class_mask]
+        class_pred = class_pred[class_mask]
 
-        # filter by class
-        if classes is not None:
-            x = x[(x[:, 5:6] == torch.tensor(classes, device=x.device)).any(1)]
+    if not boxes.shape[0]:  # no boxes after filtering
+        return [torch.zeros((0, 6), device=pred.device)]
 
-        # check shape
-        n = x.shape[0]
-        if not n:
-            continue
-        elif n > max_nms:
-            x = x[x[:, 4].argsort(descending=True)[:max_nms]]
+    # Sort by confidence
+    sorted_indices = torch.argsort(confidence, descending=True)
+    boxes = boxes[sorted_indices]
+    confidence = confidence[sorted_indices]
+    class_pred = class_pred[sorted_indices]
 
-        # batched nms
-        c = x[:, 5:6] * max_wh
-        boxes, scores = x[:, :4] + c, x[:, 4]
-        keep = ops.nms(boxes, scores, iou_thres)
+    # Apply NMS
+    keep = ops.nms(boxes, confidence, iou_thres)
+    if keep.shape[0] > max_det:
+        keep = keep[:max_det]
 
-        if keep.shape[0] > max_det:
-            keep = keep[:max_det]
+    # Combine detections into final format [x1, y1, x2, y2, conf, cls]
+    output = torch.zeros((keep.shape[0], 6), device=pred.device)
+    output[:, :4] = boxes[keep]
+    output[:, 4] = confidence[keep]
+    output[:, 5] = class_pred[keep].float()
 
-        output[xi] = x[keep]
-
-    return output
+    return [output]
