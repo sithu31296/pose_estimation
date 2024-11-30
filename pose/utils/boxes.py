@@ -39,8 +39,8 @@ def scale_boxes(boxes, orig_shape, new_shape):
     return boxes.round()
 
 
-def xywh2xyxy(x):
-    boxes = x.clone()
+def xywh2xyxy(x: np.ndarray) -> np.ndarray:
+    boxes = x.copy()
     boxes[:, 0] = x[:, 0] - x[:, 2] / 2
     boxes[:, 1] = x[:, 1] - x[:, 3] / 2
     boxes[:, 2] = x[:, 0] + x[:, 2] / 2
@@ -48,8 +48,8 @@ def xywh2xyxy(x):
     return boxes
 
 
-def xyxy2xywh(x):
-    y = x.clone()
+def xyxy2xywh(x: np.ndarray) -> np.ndarray:
+    y = x.copy()
     y[:, 0] = (x[:, 0] + x[:, 2]) / 2  # x center
     y[:, 1] = (x[:, 1] + x[:, 3]) / 2  # y center
     y[:, 2] = x[:, 2] - x[:, 0]  # width
