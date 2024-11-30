@@ -39,21 +39,35 @@ def scale_boxes(boxes, orig_shape, new_shape):
     return boxes.round()
 
 
-def xywh2xyxy(x: np.ndarray) -> np.ndarray:
-    boxes = x.copy()
+def xywh2xyxy(x: np.ndarray | torch.Tensor) -> np.ndarray:
+    if isinstance(x, torch.Tensor):
+        boxes = x.clone()
+    elif isinstance(x, np.ndarray):
+        boxes = x.copy()
+    else:
+        raise TypeError("Input must be a tensor or numpy array")
+
     boxes[:, 0] = x[:, 0] - x[:, 2] / 2
     boxes[:, 1] = x[:, 1] - x[:, 3] / 2
     boxes[:, 2] = x[:, 0] + x[:, 2] / 2
     boxes[:, 3] = x[:, 1] + x[:, 3] / 2
+
     return boxes
 
 
-def xyxy2xywh(x: np.ndarray) -> np.ndarray:
-    y = x.copy()
+def xyxy2xywh(x: np.ndarray | torch.Tensor) -> np.ndarray:
+    if isinstance(x, torch.Tensor):
+        y = x.clone()
+    elif isinstance(x, np.ndarray):
+        y = x.copy()
+    else:
+        raise TypeError("Input must be a tensor or numpy array")
+
     y[:, 0] = (x[:, 0] + x[:, 2]) / 2  # x center
     y[:, 1] = (x[:, 1] + x[:, 3]) / 2  # y center
     y[:, 2] = x[:, 2] - x[:, 0]  # width
     y[:, 3] = x[:, 3] - x[:, 1]  # height
+
     return y
 
 
