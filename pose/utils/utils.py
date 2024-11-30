@@ -13,6 +13,42 @@ def setup_cudnn() -> None:
     cudnn.deterministic = False
 
 
+def draw_bbox(
+    img: np.ndarray,
+    boxes: np.ndarray,
+    color: tuple[int, int, int] = (0, 255, 0),
+    thickness: int = 2,
+    font_scale: float = 0.5,
+    text_color: tuple[int, int, int] = (255, 255, 255),
+    text_thickness: int = 1,
+) -> np.ndarray:
+    for box in boxes:
+        x1, y1, x2, y2, conf, _ = map(int, box[:6])
+        cv2.rectangle(img, (x1, y1), (x2, y2), color, thickness)
+        conf_text = f"{conf:.2f}"
+        (text_width, text_height), _ = cv2.getTextSize(
+            conf_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, text_thickness
+        )
+        cv2.rectangle(
+            img,
+            (x1, y1 - text_height - 5),
+            (x1 + text_width + 5, y1),
+            color,
+            -1,  # Filled rectangle
+        )
+        cv2.putText(
+            img,
+            conf_text,
+            (x1 + 3, y1 - 4),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            text_color,
+            text_thickness,
+        )
+
+    return img
+
+
 def draw_coco_keypoints(img, keypoints, skeletons):
     if keypoints == []:
         return img
@@ -40,6 +76,8 @@ def draw_keypoints(img, keypoints, skeletons):
             cv2.circle(img, (x, y), 4, (255, 0, 0), 2, cv2.LINE_AA)
         for kid1, kid2 in skeletons:
             cv2.line(img, kpts[kid1 - 1], kpts[kid2 - 1], (0, 255, 0), 2, cv2.LINE_AA)
+
+    return img
 
 
 class WebcamStream:
