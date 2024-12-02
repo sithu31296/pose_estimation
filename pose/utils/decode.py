@@ -1,10 +1,13 @@
 import math
-import torch
+
 import numpy as np
+import torch
 from torch import Tensor
 
 
-def get_simdr_final_preds(pred_x: Tensor, pred_y: Tensor, boxes: Tensor, image_size: tuple):
+def get_simdr_final_preds(
+    pred_x: Tensor, pred_y: Tensor, boxes: Tensor, image_size: tuple
+):
     center, scale = boxes[:, :2].numpy(), boxes[:, 2:].numpy()
 
     pred_x, pred_y = pred_x.softmax(dim=2), pred_y.softmax(dim=2)
@@ -29,11 +32,10 @@ def get_final_preds(heatmaps: Tensor, boxes: Tensor):
             py = int(math.floor(coords[n][p][1] + 0.5))
 
             if 1 < px < W - 1 and 1 < py < H - 1:
-                diff = np.array([
-                    hm[py][px+1] - hm[py][px-1],
-                    hm[py+1][px] - hm[py-1][px]
-                ])
-                coords[n][p] += np.sign(diff) * .25
+                diff = np.array(
+                    [hm[py][px + 1] - hm[py][px - 1], hm[py + 1][px] - hm[py - 1][px]]
+                )
+                coords[n][p] += np.sign(diff) * 0.25
 
     for i in range(B):
         coords[i] = transform_preds(coords[i], center[i], scale[i], [W, H])

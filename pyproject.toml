@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pose-estimation"
+version = "0.1.0"
+description = "Top-Down Multi-person Pose Estimation"
+readme = "README.md"
+requires-python = ">=3.10.12"
+dependencies = [
+    "gitpython~=3.1.43",
+    "numpy~=1.26.4",
+    "opencv-python-headless~=4.10.0.84",
+    "torch~=2.5.1",
+    "tqdm~=4.67.0",
+    "ultralytics~=8.3.23",
+]
+scripts = { pose = "pose.infer:main" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["pose"]
